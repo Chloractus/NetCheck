@@ -13,10 +13,7 @@ from NetCheck.util.mDNS import *
 conf.verb = 0
 
 KnownDevices = {
-	"ff:ff:ff:ff:ff:ff",
-	"30:56:0f:20:59:46",
-	"84:a9:3e:51:99:a8",
-	"5c:62:8b:ee:bb:e0"
+	"ff:ff:ff:ff:ff:ff"
 }
 
 def scan(subnet: str, timeout: int = 1) -> list[dict]:

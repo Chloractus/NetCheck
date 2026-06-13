@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from scapy.all import ARP, Ether, srp, conf
 
 from NetCheck.util.NetBIOS import *
+from NetCheck.util.mDNS import *
 
 conf.verb = 0
 

@@ -1,12 +1,12 @@
 import argparse
 import sys
 import datetime
-import socket
-import struct
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 from scapy.all import ARP, Ether, srp, conf
+
+from NetBIOS import *
 
 conf.verb = 0
 
@@ -42,7 +42,7 @@ def mdnsDecode(data: bytes, offset:int) -> tuple[str, int]: #we in trouble if th
 			break
 
 		elif (length & 0xC0) == 0xC0:
-			ptr = ((length & 0x3F) << 8 | data[offset  + 1])
+			ptr = ((length & 0x3F) << 8) | data[offset  + 1]
 			sub, _ = mdnsDecode(data, ptr)
 
 			if sub:
@@ -52,13 +52,13 @@ def mdnsDecode(data: bytes, offset:int) -> tuple[str, int]: #we in trouble if th
 			break
 
 		else:
-			label = data[offset+1:offset+1+length.decode('ascii', errors='replace')]
+			label = data[offset+1 : offset+1+length].decode('ascii', errors='replace')
 			labels.append(label)
 			offset += 1 + length
 
 	return '.'.join(labels), offset
 
-def mdns(ip: str) -> str:
+def mdnsQ(ip: str) -> str:
 	reverse = ".".join(reversed(ip.split('.'))) + '.in-addr.arpa'
 
 	header = struct.pack(
@@ -117,70 +117,7 @@ def mdns(ip: str) -> str:
 	except (socket.timeout, OSError):
 		return "N/A"
 
-def nbnsEncode(name: str) -> bytes:
 
-	padded = (name + '\x00' * 16)[:16].encode('ascii')
-
-	encoded = bytearray()
-	for byte in padded:
-		encoded.append(0x41 + ((byte >> 4) & 0x0F))
-		encoded.append(0x41 + (byte & 0x0F))
-
-	return bytes([32]) + bytes(encoded) + b'\x00\x00'
-
-def netBIOS(ip: str) -> str:
-	
-	header = struct.pack(
-		">HHHHHH",
-		0xABCD,
-		0x0000,
-		1,
-		0, 0, 0
-	)
-
-	qName = nbnsEncode("*")
-	qType = struct.pack(">H", 0x0021)
-	qClass = struct.pack(">H", 0x0001)
-
-	query = header + qName + qType + qClass
-
-	try:
-
-		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		sock.settimeout(1)
-		sock.sendto(query, (ip, 137))
-		data, _ = sock.recvfrom(1024)
-		sock.close()
-
-		if len(data) < 57:
-			return "N/A"
-		
-		ansStart = 51
-		rrNameLen = 2 if data[ansStart] == 0xC0 else 35
-		rdataOffset = ansStart + rrNameLen + 10
-
-		if rdataOffset >= len(data):
-			return "N/A"
-		
-		numNames = data[rdataOffset]
-		entryStart = rdataOffset + 1
-
-		for i in range(numNames):
-			offset = entryStart + i * 18
-			if offset + 16 > len(data):
-				break
-
-			nameRaw = data[offset : offset + 15]
-			suffix = data[offset + 15]
-			nameStr = nameRaw.decode('ascii', errors='replace').rstrip(' \x00').strip()
-
-			if suffix == 0x00 and nameStr:
-				return nameStr
-			
-		return "N/A"
-	
-	except (socket.timeout, OSError):
-		return "N/A"
 
 def scan(subnet: str, timeout: int = 1) -> list[dict]:
 
@@ -210,7 +147,8 @@ def scan(subnet: str, timeout: int = 1) -> list[dict]:
 				"mac": mac,
 				"known": isKnown,
 				"dns" : "N/A",
-				"nbns" : "N/A"
+				"nbns" : "N/A",
+				"mdns" : "N/A"
 			})
 
 	totalS = len(devices)
@@ -242,23 +180,25 @@ def resolveNames(devices: list[dict]) -> None:
 	with ThreadPoolExecutor(max_workers=min(len(ips), 50)) as executor:
 		dns = {ip: executor.submit(reverseDNS, ip) for ip in ips}
 		nbns = {ip: executor.submit(netBIOS, ip) for ip in ips}
+		mdns = {ip: executor.submit(mdnsQ, ip) for ip in ips}
 
 	for device in devices:
 		ip = device['ip']
 		device['dns'] = dns[ip].result()
 		device['nbns'] = nbns[ip].result()
+		device['mdns'] = mdns[ip].result()
 
 	print("[*] Resolution complete.\n")
 
 def display(devices: list[dict], subnet: str) -> None:
 
 	timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-	print("=" * 110)
+	print("=" * 130)
 	print(f"  NETWORK MAP - {subnet}")
 	print(f"  Scanned at: {timestamp}")
-	print("=" * 110)
-	print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'DNS Hostname': <32} {'NetBIOS Name': <20} STATUS")
-	print("-" * 110)
+	print("=" * 130)
+	print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'DNS Hostname': <32} {'NetBIOS Name': <20} {'mDNS Name':<20} STATUS")
+	print("-" * 130)
 
 	if not devices:
 		print("  No devices found. Check your subnet or try a longer timeout.")
@@ -268,14 +208,15 @@ def display(devices: list[dict], subnet: str) -> None:
 			status = "[$]  Known" if device["known"] else "[!] UNKNOWN"
 			dnsName = device.get('dns', 'N/A')
 			nbnsName = device.get('nbns', 'N/A')
-			print(f"  {device['ip']:<18} {device['mac']:<20} {dnsName:<32} {nbnsName:<20} {status}")
+			mdnsName = device.get("mdns", "N/A")
+			print(f"  {device['ip']:<18} {device['mac']:<20} {dnsName:<32} {nbnsName:<20} {mdnsName:<20} {status}")
 
-	print("-" * 110)
+	print("-" * 130)
 	total = len(devices)
 	unknown = sum(1 for d in devices if not d["known"])
 	print(f"  Total devices found : {total}")
 	print(f"  Unknown devices     : {unknown}")
-	print("=" * 110)
+	print("=" * 130)
 
 	if unknown > 0:
 		print(f"  [!] WARNING: {unknown} unrecognized device(s) found on your network!")

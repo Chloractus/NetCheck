@@ -11,6 +11,7 @@ from NetCheck.util.NetBIOS import *
 from NetCheck.util.mDNS import *
 from NetCheck.util.SSDP import *
 from NetCheck.util.OUI import *
+from NetCheck.util.PScan import *
 
 conf.verb = 0
 
@@ -80,17 +81,19 @@ def resolveNames(devices: list[dict], inSSDP: bool) -> None:
 
 	print("[*] Resolving hostnames...")
 
-	with ThreadPoolExecutor(max_workers=min(len(ips), 50)) as executor:
+	with ThreadPoolExecutor(max_workers=min(len(ips), 100)) as executor:
 		dns = {ip: executor.submit(reverseDNS, ip) for ip in ips}
 		nbns = {ip: executor.submit(netBIOS, ip) for ip in ips}
 		mdns = {ip: executor.submit(mdnsQ, ip) for ip in ips}
 		oui = {mac: executor.submit(getVendor, mac, OUI) for mac in macs if mac}
+		ports = {ip: executor.submit(PScan, ip) for ip in ips}
 		if inSSDP:
 			ssdp = {ip: executor.submit(SSDP, ip) for ip in ips}
 		
 	for device in devices:
 		ip = device['ip']
 		mac = device['mac']
+		device['ports'] = ports[ip].result()
 		device['dns'] = dns[ip].result()
 		device['nbns'] = nbns[ip].result()
 		device['mdns'] = mdns[ip].result()
@@ -189,28 +192,21 @@ def parse_args() -> argparse.Namespace:
 	)
 
 	parser.add_argument(
-		"-C",
+		"-c",
 		"--clear",
 		action="store_true",
 		help="Clear the screen before starting"
 	)
 
 	parser.add_argument(
-		"-D",
+		"-d",
 		"--SSDP",
 		action="store_true",
 		help="Attempt to find SSDP details"
 	)
 
 	parser.add_argument(
-		"-S",
-		"--scan",
-		action="store_true",
-		help="Scan for open ports on all hosts"
-	)
-
-	parser.add_argument(
-		"-U",
+		"-u",
 		"--update",
 		action="store_true",
 		help="Update dependencies"

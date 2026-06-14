@@ -10,8 +10,8 @@ if __name__ == "__main__":
 		else:
 			pass
 		devices = scan(subnet=args.subnet, timeout=args.timeout)
-		resolveNames(devices)
-		display(devices, subnet=args.subnet)
+		resolveNames(devices, inSSDP=args.SSDP)
+		display(devices, subnet=args.subnet, inSSDP=args.SSDP)
 
 	except PermissionError:
 		print("\n[!] Permission denied. Please run with sudo:")

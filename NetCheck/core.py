@@ -9,6 +9,7 @@ from scapy.all import ARP, Ether, srp, conf
 from NetCheck.util.reverseDNS import *
 from NetCheck.util.NetBIOS import *
 from NetCheck.util.mDNS import *
+from NetCheck.util.SSDP import *
 
 conf.verb = 0
 
@@ -39,13 +40,21 @@ def scan(subnet: str, timeout: int = 1) -> list[dict]:
 			macClean = ':'.join(macL[i:i+2] for i in range(0, 12, 2))
 			isKnown = macClean in KnownDevices
 
+			ssdpDetails = {
+				"name" : "N/A",
+				"manufacturer" : "N/A",
+				"model" : "N/A",
+				"server" : "N/A"
+			}
+
 			devices.append({
 				"ip": ip,
 				"mac": mac,
 				"known": isKnown,
 				"dns" : "N/A",
 				"nbns" : "N/A",
-				"mdns" : "N/A"
+				"mdns" : "N/A",
+				"ssdp" : ssdpDetails
 			})
 
 	totalS = len(devices)
@@ -56,27 +65,31 @@ def scan(subnet: str, timeout: int = 1) -> list[dict]:
 
 	return devices
 
-def resolveNames(devices: list[dict]) -> None:
+def resolveNames(devices: list[dict], inSSDP: bool) -> None:
 	if not devices:
 		return
 	
 	ips = [d['ip'] for d in devices]
-	print("[*] Resolving hostnames (DNS + NetBIOS in parallel)...")
+	print("[*] Resolving hostnames...")
 
 	with ThreadPoolExecutor(max_workers=min(len(ips), 50)) as executor:
 		dns = {ip: executor.submit(reverseDNS, ip) for ip in ips}
 		nbns = {ip: executor.submit(netBIOS, ip) for ip in ips}
 		mdns = {ip: executor.submit(mdnsQ, ip) for ip in ips}
-
+		if inSSDP:
+			ssdp = {ip: executor.submit(SSDP, ip) for ip in ips}
+		
 	for device in devices:
 		ip = device['ip']
 		device['dns'] = dns[ip].result()
 		device['nbns'] = nbns[ip].result()
 		device['mdns'] = mdns[ip].result()
+		if inSSDP:
+			device['ssdp'] = ssdp[ip].result()
 
 	print("[*] Resolution complete.\n")
 
-def display(devices: list[dict], subnet: str) -> None:
+def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 
 	timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 	print("=" * 130)
@@ -111,8 +124,19 @@ def display(devices: list[dict], subnet: str) -> None:
 		for d in devices:
 			if not d["known"]:
 				print(f"      -> {d['ip']:>15}   MAC: {d['mac']}")
-
-	print()
+	if inSSDP:
+		print("=" * 130)
+		print("  SSDP Results")
+		print("=" * 130)
+		print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'NAME':<20} {'MANUFACTURER':<20} {'MODEL':<20} SERVER")
+		print("-" * 130)
+		for device in devices:
+			dets = device.get("ssdp")
+			name = dets['name']
+			manufacturer = dets["manufacturer"]
+			model = dets["model"]
+			server = dets["server"]
+			print(f"  {device['ip']:<18} {device['mac']:<20} {name:<20} {manufacturer:<20} {model:<20} {server}")
 
 def parse_args() -> argparse.Namespace:
 
@@ -140,6 +164,13 @@ def parse_args() -> argparse.Namespace:
 		"--clear",
 		action="store_true",
 		help="Clear the screen before starting"
+	)
+
+	parser.add_argument(
+		"-U",
+		"--SSDP",
+		action="store_true",
+		help="Attempt to find SSDP details"
 	)
 
 	parser.add_argument(

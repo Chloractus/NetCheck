@@ -110,6 +110,21 @@ def update(update: bool) -> None:
 	if update:
 		download_OUI()
 
+def getBest(device:dict) ->str:
+	for key in ('dns', 'nbns'):
+		value = device.get(key)
+		if isinstance(value, str) and value not in ('', 'N/A'):
+			return value
+		
+	ssdp = device.get('ssdp')
+	if isinstance(ssdp, dict) and ssdp.get('name') not in ('', 'N/A'):
+		return ssdp.get('name')
+	
+	for key in ('mdns', 'vendor'):
+		value = device.get(key)
+		if isinstance(value, str) and value not in ('', 'N/A'):
+			return value
+
 def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 
 	timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -121,7 +136,7 @@ def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 	print("-" * 130)
 
 	for device in devices:
-		bestName = device.get('best name', 'N/A')
+		bestName = getBest(device)
 		ports = device.get('ports', 'N/A')
 		vendor = device.get('vendor', "N/A")
 		print(f"  {device['ip']:<18} {device['mac']:<20} {bestName:<32} {ports:<20} {vendor:<20}")

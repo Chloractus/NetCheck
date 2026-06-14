@@ -9,6 +9,7 @@ if __name__ == "__main__":
 			subprocess.run('cls', shell=True)
 		else:
 			pass
+		update(update=args.update)
 		devices = scan(subnet=args.subnet, timeout=args.timeout)
 		resolveNames(devices, inSSDP=args.SSDP)
 		display(devices, subnet=args.subnet, inSSDP=args.SSDP)

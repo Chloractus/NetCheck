@@ -10,6 +10,7 @@ from NetCheck.util.reverseDNS import *
 from NetCheck.util.NetBIOS import *
 from NetCheck.util.mDNS import *
 from NetCheck.util.SSDP import *
+from NetCheck.util.OUI import *
 
 conf.verb = 0
 
@@ -51,6 +52,9 @@ def scan(subnet: str, timeout: int = 1) -> list[dict]:
 				"ip": ip,
 				"mac": mac,
 				"known": isKnown,
+				"vendor" : "N/A",
+				"best name" : "N/A",
+				"ports" :"N/A",
 				"dns" : "N/A",
 				"nbns" : "N/A",
 				"mdns" : "N/A",
@@ -69,25 +73,39 @@ def resolveNames(devices: list[dict], inSSDP: bool) -> None:
 	if not devices:
 		return
 	
+	OUI = loadOUI()
+
 	ips = [d['ip'] for d in devices]
+	macs = [d['mac'] for d in devices]
+
 	print("[*] Resolving hostnames...")
 
 	with ThreadPoolExecutor(max_workers=min(len(ips), 50)) as executor:
 		dns = {ip: executor.submit(reverseDNS, ip) for ip in ips}
 		nbns = {ip: executor.submit(netBIOS, ip) for ip in ips}
 		mdns = {ip: executor.submit(mdnsQ, ip) for ip in ips}
+		oui = {mac: executor.submit(getVendor, mac, OUI) for mac in macs if mac}
 		if inSSDP:
 			ssdp = {ip: executor.submit(SSDP, ip) for ip in ips}
 		
 	for device in devices:
 		ip = device['ip']
+		mac = device['mac']
 		device['dns'] = dns[ip].result()
 		device['nbns'] = nbns[ip].result()
 		device['mdns'] = mdns[ip].result()
+
+		if mac:
+			device['vendor'] = oui[mac].result()
+
 		if inSSDP:
 			device['ssdp'] = ssdp[ip].result()
 
 	print("[*] Resolution complete.\n")
+
+def update(update: bool) -> None:
+	if update:
+		download_OUI()
 
 def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 
@@ -95,6 +113,21 @@ def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 	print("=" * 130)
 	print(f"  NETWORK MAP - {subnet}")
 	print(f"  Scanned at: {timestamp}")
+	print("=" * 130)
+	print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'Best Name': <32} {'Ports': <20} {'Vendor':<20}")
+	print("-" * 130)
+
+	for device in devices:
+		bestName = device.get('best name', 'N/A')
+		ports = device.get('ports', 'N/A')
+		vendor = device.get('vendor', "N/A")
+		print(f"  {device['ip']:<18} {device['mac']:<20} {bestName:<32} {ports:<20} {vendor:<20}")
+
+	print("-" * 130)
+	total = len(devices)
+	unknown = sum(1 for d in devices if not d["known"])
+	print(f"  Total devices found : {total}")
+	print(f"  Unknown devices     : {unknown}")
 	print("=" * 130)
 	print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'DNS Hostname': <32} {'NetBIOS Name': <20} {'mDNS Name':<20} STATUS")
 	print("-" * 130)
@@ -110,12 +143,8 @@ def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 			mdnsName = device.get("mdns", "N/A")
 			print(f"  {device['ip']:<18} {device['mac']:<20} {dnsName:<32} {nbnsName:<20} {mdnsName:<20} {status}")
 
+
 	print("-" * 130)
-	total = len(devices)
-	unknown = sum(1 for d in devices if not d["known"])
-	print(f"  Total devices found : {total}")
-	print(f"  Unknown devices     : {unknown}")
-	print("=" * 130)
 
 	if unknown > 0:
 		print(f"  [!] WARNING: {unknown} unrecognized device(s) found on your network!")
@@ -167,7 +196,7 @@ def parse_args() -> argparse.Namespace:
 	)
 
 	parser.add_argument(
-		"-U",
+		"-D",
 		"--SSDP",
 		action="store_true",
 		help="Attempt to find SSDP details"
@@ -178,6 +207,13 @@ def parse_args() -> argparse.Namespace:
 		"--scan",
 		action="store_true",
 		help="Scan for open ports on all hosts"
+	)
+
+	parser.add_argument(
+		"-U",
+		"--update",
+		action="store_true",
+		help="Update dependencies"
 	)
 
 	return parser.parse_args()

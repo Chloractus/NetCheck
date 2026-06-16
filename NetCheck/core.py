@@ -2,9 +2,10 @@ import argparse
 import sys
 import datetime
 import subprocess
+import ipaddress
 from concurrent.futures import ThreadPoolExecutor
 
-from scapy.all import ARP, Ether, srp, conf
+from scapy.all import IP, ICMP, sr, ARP, Ether, srp, conf
 
 from NetCheck.util.reverseDNS import *
 from NetCheck.util.NetBIOS import *
@@ -19,15 +20,52 @@ KnownDevices = {
 	"ff:ff:ff:ff:ff:ff"
 }
 
+def ping(ip: str, timeout: int = 1) -> bool:
+	try:
+		result = subprocess.run(
+			['ping', '-n', '1', ip],
+			stdout=subprocess.DEVNULL,
+			stderr=subprocess.DEVNULL,
+			timeout=timeout
+		)
+		return result.returncode == 0
+	except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+		return False
+
+
 def scan(subnet: str, timeout: int = 1) -> list[dict]:
+
+	print(f"\n[*] Scanning subnet: {subnet}")
+	try:
+		network = ipaddress.ip_network(subnet, strict=False)
+	except ValueError:
+		print(f"[!] Invalid subnet: {subnet}")
+
+	allIPs = [str(ip) for ip in network]
+
+	print(f"[*] Pinging {len(allIPs)} IPv4 address(es) (ICMP)")
+
+	aliveIPs = set()
+
+	with ThreadPoolExecutor(max_workers=min(len(allIPs), 100)) as exe:
+		futures = {exe.submit(ping, ip, 1.0): ip for ip in allIPs}
+		for future in futures:
+			if future.result():
+				aliveIPs.add(futures[future])
+
+	print(f"[*] Ping Complete: {len(aliveIPs)} host(s) pinged\n")
+
+	if not aliveIPs:
+		print("[!] No Hosts responded -- nothing to ARP. \n")
+		return []
+
+	print(f"[*] Waiting up to {timeout}s for ARP replies...\n")
 
 	frame = Ether(dst="ff:ff:ff:ff:ff:ff")
 	seen_ips = set()
 	arpRequest = ARP(pdst=subnet)
 	packet = frame / arpRequest
 
-	print(f"\n[*] Scanning subnet: {subnet}")
-	print(f"[*] Waiting up to {timeout}s for ARP replies...\n")
 
 	ans, unans = srp(packet, timeout=timeout, multi=True)
 
@@ -66,6 +104,33 @@ def scan(subnet: str, timeout: int = 1) -> list[dict]:
 	totalR = len(ans)
 	print(f"[*] Received {totalR} ARP reply packet(s) -- {totalS} unique device(s)\n")
 
+	arpMissing = aliveIPs - seen_ips
+
+	for arpM in arpMissing:
+		ssdpDetails = {
+			"name" : "N/A",
+			"manufacturer" : "N/A",
+			"model" : "N/A",
+			"server" : "N/A"
+		}
+
+		devices.append({
+			"ip" : arpM,
+			"mac" : "UNKNOWN",
+			"known" : False,
+			"vendor" : "N/A",
+			"best name" : "N/A",
+			"ports" :"N/A",
+			"dns" : "N/A",
+			"nbns" : "N/A",
+			"mdns" : "N/A",
+			"ssdp" : ssdpDetails
+		})
+
+	if arpMissing:
+		print(f"[*] {len(arpMissing)} host(s) responded to ping but not ARP")
+		print(f"(MAC Unknown): {', '.join(sorted(arpMissing))}")
+
 	devices.sort(key=lambda d:tuple(int(x) for x in d["ip"].split(".")))
 
 	return devices
@@ -81,7 +146,7 @@ def resolveNames(devices: list[dict], inSSDP: bool) -> None:
 
 	print("[*] Resolving hostnames...")
 
-	with ThreadPoolExecutor(max_workers=min(len(ips), 100)) as executor:
+	with ThreadPoolExecutor(max_workers=min(len(ips) * 4, 150)) as executor:
 		dns = {ip: executor.submit(reverseDNS, ip) for ip in ips}
 		nbns = {ip: executor.submit(netBIOS, ip) for ip in ips}
 		mdns = {ip: executor.submit(mdnsQ, ip) for ip in ips}
@@ -147,7 +212,7 @@ def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 	print(f"  Total devices found : {total}")
 	print(f"  Unknown devices     : {unknown}")
 	print("=" * 130)
-	print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'DNS Hostname': <32} {'NetBIOS Name': <20} {'mDNS Name':<20} STATUS")
+	print(f"  {'IP ADDRESS':<18} {'MAC ADDRESS':<20} {'DNS Hostname': <32} {'NetBIOS Name': <20} {'mDNS Name':<22} STATUS")
 	print("-" * 130)
 
 	if not devices:
@@ -159,7 +224,7 @@ def display(devices: list[dict], subnet: str, inSSDP: bool) -> None:
 			dnsName = device.get('dns', 'N/A')
 			nbnsName = device.get('nbns', 'N/A')
 			mdnsName = device.get("mdns", "N/A")
-			print(f"  {device['ip']:<18} {device['mac']:<20} {dnsName:<32} {nbnsName:<20} {mdnsName:<20} {status}")
+			print(f"  {device['ip']:<18} {device['mac']:<20} {dnsName:<32} {nbnsName:<20} {mdnsName:<22} {status}")
 
 
 	print("-" * 130)

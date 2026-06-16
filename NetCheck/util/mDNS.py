@@ -60,7 +60,7 @@ def mdnsQ(ip: str) -> str:
 	query = header + qName + qType + qClass
 	try:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		sock.settimeout(1)
+		sock.settimeout(0.3)
 		sock.sendto(query, (ip, 5353))
 		data, _ = sock.recvfrom(4096)
 		sock.close()

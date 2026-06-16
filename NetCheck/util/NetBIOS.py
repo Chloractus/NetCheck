@@ -31,7 +31,7 @@ def netBIOS(ip: str) -> str:
 	try:
 
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		sock.settimeout(1)
+		sock.settimeout(0.3)
 		sock.sendto(query, (ip, 137))
 		data, _ = sock.recvfrom(1024)
 		sock.close()

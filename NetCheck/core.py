@@ -7,12 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from scapy.all import IP, ICMP, sr, ARP, Ether, srp, conf
 
-from NetCheck.util.reverseDNS import *
-from NetCheck.util.NetBIOS import *
-from NetCheck.util.mDNS import *
-from NetCheck.util.SSDP import *
-from NetCheck.util.OUI import *
-from NetCheck.util.PScan import *
+from util.reverseDNS import *
+from util.NetBIOS import *
+from util.mDNS import *
+from util.SSDP import *
+from util.OUI import *
+from util.PScan import *
 
 conf.verb = 0
 

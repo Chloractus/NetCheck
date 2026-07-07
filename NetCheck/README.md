@@ -39,17 +39,17 @@ program gathers. Here's a bit of a deeper dive into it's different functionaliti
   - This program uses a variety of name resolution methods inside of the util section of this program.
   - These methods include:
     - Reverse DNS
-      - *(Coming Soon)*
+      - See [Reverse DNS](util/README.md#reverse-dns)
     - NetBIOS
-      - *(Coming Soon)*
+      - See [NetBIOS](util/README.md#netbios)
     - mDNS
-      - *(Coming Soon)*
+      - See [mDNS](util/README.md#mdns)
     - SSDP
-      - *(Coming Soon)*
+      - See [SSDP](util/README.md#ssdp)
     - OUI
-      - *(Coming Soon)*
+      - See [OUI](util/README.md#oui)
     - Port Scan
-      - *(Coming Soon)*
+      - See [Port Scan](util/README.md#port-scan)
 
 - Other important functions:
   - There is a list at the top of the script that allows users to set specific MAC Addresses as "known" or legitimate devices. This isn't the absolute best method for this but it gets the job done for now.

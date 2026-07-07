@@ -39,8 +39,61 @@ Python makes it super simple to use Reverse DNS and it all boils down to that li
 
 ## SSDP
 
-*(Coming Soon!)*
+SSDP (or Simple Service Discovery Protocol) is a method similar to DNS but instead of using a central server / router, the device does it by itself. This method involves sending and recieving a specially crafted packet in order to get a URL for a given UPnP (or Universal Plug and Play) device. This is one of the more annoying and usually dangerous methods. While it is useful for getting device information, it can be easily exploited.
 
+The first thing we do in our script is craft an M-SEARCH packet for a given IPv4 Address.
+
+```python
+msearch = (
+  "M-SEARCH * HTTP/1.1\r\n"
+  f"HOST: {ip}:1900\r\n"
+  'MAN: "ssdp:discover"\r\n'
+  f"MX: 3\r\n"
+  "ST: ssdp:all\r\n"
+  "\r\n"
+).encode('utf-8')
+```
+
+After creating the specific packet we need, we send out the packet...
+
+```python
+sock.sendto(msearch, (ip, 1900))
+```
+
+...and parse the results to get a URL and a Server for the UPnP Device
+
+```python
+for line in data.decode('utf-8', errors='replace').split('\r\n'):
+  upper = line.upper()
+
+  if upper.startswith('LOCATION:'):
+    location = line[9:].strip()
+
+  elif upper.startswith('SERVER:'):
+    server = line[7:].strip()
+```
+
+Once we have the URL and the Server, we can query the URL with an HTTP GET Request.
+
+```python
+with request.urlopen(location, timeout=2) as resp:
+  xmlData = resp.read()
+```
+
+If the URL responds, we parse the XML results that we get and the information we want. Otherwise, we use the Server name or just None
+
+```python
+return {
+  'name' : wanted['friendlyName'] or server or 'N/A',
+  'manufacturer' : wanted['manufacturer'] or 'N/A',
+  'model' : wanted['modelName'] or 'N/A',
+  'server' : server or 'N/A'
+}
+```
+
+(For more information on how SSDP works, See [here](https://en.wikipedia.org/wiki/Simple_Service_Discovery_Protocol)
+
+| Yes, It's a wikipedia article. Cry about it |
 ## OUI
 
 OUI (or Organizationally Unique Identifier) is the practice that many companies use where the first 6 characters in a device's MAC Address are the same across everything the company provides. This is a great tool for identifying devices because we can check for those specific nuances.

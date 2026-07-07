@@ -65,3 +65,7 @@ This part also handles the ordering in which events happen inside of the program
 This part also handles making sure that the program exits without causing a giant scene over a sudden stop.
 
 [Back to top](#this-is-where-the-magic-happens)
+
+##
+
+>⚠️ WARNING: These scripts are for educational purposes only and are not to be used for malicious actions. ⚠️

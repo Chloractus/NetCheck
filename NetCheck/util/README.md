@@ -37,3 +37,9 @@ All of these were specifically made to obtain as much useful information on host
 ## Port Scan
 
 *(Coming Soon!)*
+
+[Back to top](#utilities)
+
+##
+
+>⚠️ WARNING: These scripts are for educational purposes only and are not to be used for malicious actions. ⚠️

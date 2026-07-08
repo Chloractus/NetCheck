@@ -31,7 +31,70 @@ Python makes it super simple to use Reverse DNS and it all boils down to that li
 
 ## NetBIOS
 
-*(Coming Soon!)*
+NetBIOS (or Network Basic Input/Output System) is a legacy network protocol that was primarily used in older Windows operating systems to perform various tasks. One of which was a method of name resolution similar to that of DNS. NetBIOS has a few distinct caveats though, one of these being that it only works on LANs.
+
+For the most part, NetBIOS has been phased out and replaced with new protocols like DNS. Yet, since it is very similar to DNS and is still used in some older devices, I decided to include it in this project. When it comes to using NetBIOS in Python, its mch more difficult than DNS because it is far less prominent. That being said...
+
+The NetBIOS name system works in a pretty interesting fashion. It requires us to make our own packet at the byte level but before we get into that, we have to understand how to encode/decode a name for NetBIOS. NetBIOS, like many other protocols, is very picky about how a packet is formated. For example, to encode a name for a NetBIOS packet, we have to first pad the name to be exactly 16 bytes (with each byte being 8 bits) long by using null byte values and encoding the whole message using ASCII so it turns into usable bytes.
+
+```python
+padded = (name + '\x00' * 16)[:16].encode('ascii')
+```
+
+Then we have to create an array of bytes to hold all of the different byte values. When we do this, we also have to loop through all of the bytes and seperate them into their upper and lower nibbles (The upper nibble is the first 4 bits in the byte and the lower nibble is the last 4 bits in the byte. Once we seperate them into nibbles, we have to add 0x41 to both so that they can be interpreted as ASCII characters.
+
+```python
+encoded = bytearray()
+for byte in padded:
+  encoded.append(0x41 + ((byte >> 4) & 0x0F))
+  encoded.append(0x41 + (byte & 0x0F))
+```
+
+The last part of the encoding process involves returning an array of bytes with the first byte being the length of the message and the last 2 bytes being null bytes so that NetBIOS knows where the name ends.
+
+```python
+return bytes([32]) + bytes(encoded) + b'\x00\x00'
+```
+
+Now that the encoding is done, its time to make the packet. Before we can send out anything, we have to make all 4 of the parts of the packet. First, we have to make the header. The header is the first part of the packet, it tells the recipient some basic information about the packet. For example, we tell the recipient we are sending 6 bytes that are 16 bits each (<- Thats what the H's mean) and we give them an identifier for the reply (Thats what 0xABCD means). There is some more stuff that we do in the header but we don't need to get into that for this.
+
+```python
+header = struct.pack(
+  ">HHHHHH",
+  0xABCD,
+  0x0000,
+  1,
+  0, 0, 0
+)
+```
+
+Once we make the header, we can knock out the other 3 parts super easily. First, we make the qName (or the payload) an encoded "*". The reason we use an "*" for this because NetBIOS uses the "*" as a wildcard name that is interpreted as "Please gimme all your stuff". Next, we make qType which tells NetBIOS that we are querying it. Lastly, we make the qClass which, once again, tells NetBIOS that we are querying it (main difference between qType and qClass is that qClass tells it the type of class we want to use for the query. This one is known as IN).
+
+```python
+qName = nbnsEncode("*")
+qType = struct.pack(">H", 0x0021)
+qClass = struct.pack(">H", 0x0001)
+```
+
+Now that we finally have the pieces for the packet, we can put everything together to form our packet.
+
+```python
+query = header + qName + qType + qClass
+```
+
+With the packet made, we can finally send it out to a specific IPv4 Host.
+
+```python
+sock.sendto(query, (ip, 137))
+```
+
+If the target device has NetBIOS enabled, it will recieve this packet and reply with it's NetBIOS information (which includes its name). Now of course we have to do some manipulation and stripping of the reply to eventually obtain the desired NetBIOS name.
+
+```python
+nameStr = nameRaw.decode('ascii', errors='replace').rstrip(' \x00').strip()
+```
+
+(There is still a LOT more that goes on with NetBIOS which you can read about [here](https://wirexsystems.com/resource/protocols/netbios/))
 
 ## mDNS
 

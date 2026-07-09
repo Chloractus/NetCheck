@@ -29,6 +29,8 @@ Python makes it super simple to use Reverse DNS and it all boils down to that li
 
 (There is a LOT more technical stuff that goes into how DNS and Reverse DNS work. You can read about it [here](https://www.cloudflare.com/learning/dns/glossary/reverse-dns/))
 
+[Complete Python Script](reverseDNS.py)
+
 ## NetBIOS
 
 NetBIOS (or Network Basic Input/Output System) is a legacy network protocol that was primarily used in older Windows operating systems to perform various tasks. One of which was a method of name resolution similar to that of DNS. NetBIOS has a few distinct caveats though, one of these being that it only works on LANs.
@@ -96,9 +98,82 @@ nameStr = nameRaw.decode('ascii', errors='replace').rstrip(' \x00').strip()
 
 (There is still a LOT more that goes on with NetBIOS which you can read about [here](https://wirexsystems.com/resource/protocols/netbios/))
 
+[Complete Python Script](NetBIOS.py)
+
 ## mDNS
 
-*(Coming Soon!)*
+mDNS (or Multicast Domain Name Service) works almost identically to normal DNS. The main difference (and the reason I have it at all) is because it can help to discover devices on a LAN that don't have access to a central server / access to normal DNS. That being said, mDNS isn't nearly as easy to use as DNS because it is not used nearly as often.
+
+When it comes to mDNS, getting it working in Python is VERY similar to how we did NetBIOS. First, we create an encode fucntion:
+
+```python
+encoded = b''
+  for label in name.split('.'):
+    if label:
+      encoded += bytes([len(label)]) + label.encode('ascii')
+return encoded + b'\x00'
+```
+
+and (unlike NetBIOS) a decode function:
+
+```python
+...
+label = data[offset+1 : offset+1+length].decode('ascii', errors='replace')
+labels.append(label)
+offset += 1 + length
+...
+```
+
+Then we start making the 4 parts of the query. First, we make the header which tells the recipient the format of the packet. For example, this script creates a header that sats the packet will have six 2-byte integers (>HHHHHH), it says that we are going to be using a Transaction ID of 0x0001, with no special flags, 1 question, and no extra records (0, 0, 0).
+
+```python
+header = struct.pack(
+  '>HHHHHH',
+  0x0001,
+  0x0000,
+  1,
+  0, 0, 0
+)
+```
+
+After the header, the other 3 parts a rather straight forward. First is qName which is the encoded reverse lookup address, next is qType which tells the recipient that this is a PTR record query (12 is the DNS type for PTR), and lastly is qClass which tells the recipient that this query is using IN (Internet Class. This is the lower bits of the number / 0x0001) and that we want a direct unicast response (This is the upper bits of the number / 0x8000) from the device.
+
+```python
+qName = mdnsEncode(reverse)
+qType = struct.pack('>H', 12)
+qClass = struct.pack('>H', 0x8001)
+```
+
+Then we assemble the packet...
+
+```python
+query = header + qName + qType + qClass
+```
+
+Send it out and gather the response...
+
+```python
+sock.sendto(query, (ip, 5353))
+data, _ = sock.recvfrom(4096)
+```
+
+Then at last run a few checks and parse the response for the mDNS name we want
+
+```python
+...
+if rrType == 12:
+  hostname, _ = mdnsDecode(data, offset)
+
+  if hostname:
+    return hostname.rstrip('.')
+...
+```
+
+(There is a decent amount more to know about mDNS and it's quirks compared to regular DNS. You can check them out [here](https://en.wikipedia.org/wiki/Multicast_DNS))
+
+| Yes, It's a wikipedia article. Cry about it. |
+
+[Complete Python Script](mDNS.py)
 
 ## SSDP
 
@@ -156,7 +231,10 @@ return {
 
 (For more information on how SSDP works, See [here](https://en.wikipedia.org/wiki/Simple_Service_Discovery_Protocol)
 
-| Yes, It's a wikipedia article. Cry about it |
+| Yes, It's a wikipedia article. Cry about it. |
+
+[Complete Python Script](SSDP.py)
+
 ## OUI
 
 OUI (or Organizationally Unique Identifier) is the practice that many companies use where the first 6 characters in a device's MAC Address are the same across everything the company provides. This is a great tool for identifying devices because we can check for those specific nuances.
@@ -191,7 +269,10 @@ return ouiDB.get(oui, "Unknown Vendor")
 
 (See more about how OUIs work / what they mean [here](https://en.wikipedia.org/wiki/Organizationally_unique_identifier))
 
-| Yes, it is a wikipedia link, cry about it. |
+| Yes, It's a wikipedia article. Cry about it. |
+
+[Complete Python Script](OUI.py)
+
 ## Port Scan
 
 Port scanning is the action of checking for open ports on a given device / IPv4 Address. In our case, we use port scanning in order to find more information about a given host. Unfortunately, I'm not going to try and explain ports... (See [here](https://www.cloudflare.com/learning/network-layer/what-is-a-computer-port/))
@@ -209,6 +290,8 @@ After attempting a connection, we record the whether or not we were allowed to c
 if result == 0:
   return COMMON_PORTS.get(port)
 ```
+
+[Complete Python Script](PScan.py)
 
 ##
 

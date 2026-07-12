@@ -9,9 +9,9 @@ if __name__ == "__main__":   #Default run check to start the program
 			subprocess.run('cls', shell=True)   #If they did, run a screen clear function (Currently works on Windows PS)
 		else:
 			pass                                #If not then we move on
-		update(update=args.update)              #We then run the update function and update the OUI if the user used the update arguement
+		OUI = loadOUI(update=args.update)              #We then load the OUI and update it if the user added the arguement for it
 		devices = scan(subnet=args.subnet, timeout=args.timeout)   #Then we gather our devices
-		resolveNames(devices, inSSDP=args.SSDP)                    #And we resolve information on them
+		resolveNames(devices, inSSDP=args.SSDP, DB=OUI)                    #And we resolve information on them
 		display(devices, subnet=args.subnet, inSSDP=args.SSDP)     #Lastly, we display the results from everything
 
 	except PermissionError:                                       #If at any point we get a permission error

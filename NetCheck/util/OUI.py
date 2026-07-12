@@ -35,13 +35,16 @@ def download_OUI() -> None:
     print(f"[+] Saved database to {OUI_FILE}")         #Prints out a notifier that we successfully saved the database
     sys.exit(0)                                        #Exits with the exit code 0 because the download was successful
 
-def loadOUI() -> dict:
+def loadOUI(update: bool) -> dict:
     """
     This function parses the OUI into a usable dictionary that we can search through.
 
     Returns:
         Dictionary. This function returns a Dictionary of MAC Addresses and their OUIs.
     """
+
+    if update:
+        download_OUI()
     
     if not os.path.exists(OUI_FILE):                                             #First, we check to see if the OUI is downloaded
         print("[!] Database not found. (Run NetCheck -u or NetCheck --update)")  #If it isn't, we print out a notifier that the database was not found

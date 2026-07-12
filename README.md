@@ -1,4 +1,6 @@
-# NetCheck
+![Project Name](images/ascii-art-text.png)
+
+---
 
 NetCheck is a Python-based beginner's guide to LAN discovery protocols (e.g., mDNS, NetBIOS, SSDP), exploring how they work under the hood, implemented from scratch.
 

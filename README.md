@@ -1,19 +1,15 @@
 # NetCheck
 
-This is a program specifically designed to scan local networks for hosts and gather information regarding those hosts.
-It uses a variety of different host discovery methods and gathers information from a variety of sources.
+NetCheck is a Python-based beginner's guide to LAN discovery protocols (e.g., mDNS, NetBIOS, SSDP), exploring how they work under the hood, implemented from scratch.
 
-This program is meant to be both a usable program for anyone to use and a proof of concept for Open-Source Automated Security Analysis / IDS.
+NetCheck covers network reconnaissance techniques from passive sniffing to port scanning with write-ups explaining the implementation of each.
 
-Since this repository is a proof of concept, everything is HEAVILY explained so that anyone can look into this repository and learn something new.
+This is phase one of my plan to create an open-source network reconnaissance tool in C++ with a built-in GUI and a broader range of protocols.
 
 ## For more information
+- Check out [Core Functionality](NetCheck/README.md#this-is-where-the-magic-happens)
+- Check out [Utilities](NetCheck/util/README.md#utilities)
 
-- See these general README sections:
-  - Check out [Core Functionality](NetCheck/README.md#this-is-where-the-magic-happens)
-  - Check out [Utilities](NetCheck/util/README.md#utilities)
+---
 
-
-##
-
->⚠️ WARNING: These scripts are for educational purposes only and are not to be used for malicious actions. ⚠️
+>⚠️ WARNING: These scripts are for educational purposes only. They are not to be used against networks you do not own or have explicit permission to test and are not to be used for malicious actions. ⚠️

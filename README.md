@@ -1,4 +1,4 @@
-![Project Name](images/ascii-art-text.png)
+![Project Name](images/NetCheck-ASCII-Art.png)
 
 ---
 
